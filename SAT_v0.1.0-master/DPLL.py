@@ -29,6 +29,8 @@ class NextRec:
 
 def get_next_rec(clause: list[list[str]], vars: list[str], probabilities: list[float]) -> NextRec:
     def maximumLikelihoodEstimationHeuristic() -> str:
+        clause_vars = {literal.lower() for disjunction in clause for literal in disjunction}
+
         variable = vars[0]
         close_probability = probabilities[0]
         for i in range(1, len(vars)):
@@ -39,9 +41,10 @@ def get_next_rec(clause: list[list[str]], vars: list[str], probabilities: list[f
         return variable
 
     def maximumPosterioriEstimationHeuristic() -> str:
+
+        clause_vars = {literal.lower() for disjunction in clause for literal in disjunction}
         max_var = None
         max_score = 0
-
         for i in range(len(vars)):
             if vars[i] in clause_vars:
                 prob_true = probabilities[i]
@@ -79,7 +82,6 @@ def get_next_rec(clause: list[list[str]], vars: list[str], probabilities: list[f
                 jw_scores[var] = jw_scores.get(var, 0) + probabilities[vars.index(var)] * 2 ** (-len(clause))
         return max(jw_scores, key=jw_scores.get)
 
-    clause_vars = {literal.lower() for disjunction in clause for literal in disjunction}
 
     return NextRec(JeroslowWangHeuristic(), RecType.BOTH)
 
