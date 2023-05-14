@@ -85,8 +85,7 @@ def get_next_rec(clause: list[list[str]], vars: list[str], probabilities: list[f
     def standartDPLL() -> str:
         for disjunction in clause:
             for literal in disjunction:
-                return literal
-
+                return literal.lower()
 
     return NextRec(JeroslowWangHeuristic(), RecType.BOTH)
 
