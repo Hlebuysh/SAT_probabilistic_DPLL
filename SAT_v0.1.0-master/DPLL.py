@@ -82,6 +82,11 @@ def get_next_rec(clause: list[list[str]], vars: list[str], probabilities: list[f
                 jw_scores[var] = jw_scores.get(var, 0) + probabilities[vars.index(var)] * 2 ** (-len(clause))
         return max(jw_scores, key=jw_scores.get)
 
+    def standartDPLL() -> str:
+        for disjunction in clause:
+            for literal in disjunction:
+                return literal
+
 
     return NextRec(JeroslowWangHeuristic(), RecType.BOTH)
 
