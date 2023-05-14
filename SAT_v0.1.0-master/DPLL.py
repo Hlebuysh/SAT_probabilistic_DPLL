@@ -334,7 +334,7 @@ ALL: all kinds of heuristics in order''')
 
     i = 1
     while i < len(sys.argv):
-        if sys.argv[i] == '--expression':
+        if sys.argv[i] == '-expression':
             set_command_line_expression()
             i += 1
             continue
@@ -342,13 +342,13 @@ ALL: all kinds of heuristics in order''')
         if len(sys.argv) - 1 == i:
             sys.exit('There is no argument for the command ' + sys.argv[i])
         match sys.argv[i]:
-            case '--heuristic':
+            case '-heuristic':
                 set_heuristic_type(sys.argv[i + 1])
                 i += 2
-            case '--input':
+            case '-input':
                 set_input_file(sys.argv[i + 1])
                 i += 2
-            case '--output':
+            case '-output':
                 set_output_file(sys.argv[i + 1])
                 i += 2
             case _:
@@ -360,7 +360,7 @@ def main():
     global input_file
     global output_file
     global command_line_expression
-    if (len(sys.argv) == 2) and (sys.argv[1] == '-help'):
+    if (len(sys.argv) == 2) and (sys.argv[1] == '--help'):
         sys.exit(open('Help').read())
     else:
         if len(sys.argv) > 1:

@@ -1,8 +1,9 @@
 
 There are 3 pDPLL parameters:
---input <file>              selecting a file to enter the KNF
---heuristic <variant>       choosing a heuristic option for pDPLL
---output <file>             selecting a file to enter the result
+-input <file>              selecting a file to enter the KNF
+-heuristic <variant>       choosing a heuristic option for pDPLL
+-output <file>             selecting a file to enter the result
+-expression                allows you to enter an expression in the console
 
 Input format:
 Variables are named according to the rule x<n>,
