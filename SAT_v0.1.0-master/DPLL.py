@@ -8,6 +8,13 @@ class RecType(Enum):
     TRUE = auto()
     BOTH = auto()
 
+class HeuristicType(Enum):
+    STANDART_DPLL = 'ST'
+    MAXIMUM_LIKELIHOOD_ESTIMATION = 'MLE'
+    MAXIMUM_POSTERIORI_ESTIMATION = 'MPE'
+    MOST_CONSTRAINED_VARIABLE = 'MCV'
+    JEROSLOW_WANG = 'JW'
+
 
 ## RecType используется для определения типов записей (record types) в NextRec,
 # чтобы указать, какие ветви должны быть продолжены в алгоритме DPLL.
@@ -28,7 +35,7 @@ class NextRec:
 # которая будет использоваться для дальнейшего выполнения алгоритма.
 
 
-heuristic_type = 'ST'
+heuristic_type = 'ALL'
 input_file = 'input.txt'
 output_file = 'output.txt'
 
@@ -108,15 +115,15 @@ def get_next_rec(clause: list[list[str]], vars: list[str], probabilities: list[f
                 return literal.lower()
     s = ''
     match heuristic_type:
-        case 'ST':
+        case HeuristicType.STANDART_DPLL:
             s = standartDPLL()
-        case 'MLE':
+        case HeuristicType.MAXIMUM_LIKELIHOOD_ESTIMATION:
             s = maximumLikelihoodEstimationHeuristic()
-        case 'MPE':
+        case HeuristicType.MAXIMUM_POSTERIORI_ESTIMATION:
             s = maximumPosterioriEstimationHeuristic()
-        case 'MCV':
+        case HeuristicType.MOST_CONSTRAINED_VARIABLE:
             s = mostConstrainedVariableHeuristic()
-        case 'JW':
+        case HeuristicType.JEROSLOW_WANG:
             s = JeroslowWangHeuristic()
     return NextRec(s, RecType.BOTH)
 
@@ -213,6 +220,8 @@ def base_dpll(clause, vars, inter, probabilities):
         else:
             if base_dpll(true_branch, vars, inter, recalculate_probabilities(clause, probabilities, vars, next_rec.var)):
                 return True
+        if base_dpll(true_branch, vars, inter, recalculate_probabilities(clause, probabilities, vars, next_rec.var)):
+            return True
 
     def falseBrunch() -> bool:
         false_branch = gen_branch(clause, next_rec, False)
@@ -222,8 +231,10 @@ def base_dpll(clause, vars, inter, probabilities):
             if base_dpll(false_branch, vars, inter, probabilities):
                 return True
         else:
-            if base_dpll(false_branch, vars, inter, probabilities):
+            if base_dpll(false_branch, vars, inter, recalculate_probabilities(clause, probabilities, vars, next_rec.var, is_false=True)):
                 return True
+        if base_dpll(false_branch, vars, inter, recalculate_probabilities(clause, probabilities, vars, next_rec.var, is_false=True)):
+            return True
 
     if len(clause) == 0:
         with open(output_file, 'w', encoding='UTF-8') as f:
@@ -261,14 +272,73 @@ def dpll(clause, vars):
     base_dpll(clause, vars, inter, probabilities)
     return
 
+
+def executeCommand():
+    def set_heuristic_type(type: str):
+        global heuristic_type
+        match type:
+            case 'ST':
+                heuristic_type = HeuristicType.STANDART_DPLL
+            case 'MLE':
+                heuristic_type = HeuristicType.MAXIMUM_LIKELIHOOD_ESTIMATION
+            case 'MPE':
+                heuristic_type = HeuristicType.MAXIMUM_POSTERIORI_ESTIMATION
+            case 'MCV':
+                heuristic_type = HeuristicType.MOST_CONSTRAINED_VARIABLE
+            case 'JW':
+                heuristic_type = HeuristicType.JEROSLOW_WANG
+            case 'ALL':
+                heuristic_type = 'ALL'
+            case _:
+                sys.exit(type + ''' - Invalid heuristic type.
+There are only 6 types of heuristics available to work with:
+ST: STANDART_DPLL
+MLE: MAXIMUM_LIKELIHOOD_ESTIMATION
+MPE: MAXIMUM_POSTERIORI_ESTIMATION
+MCV: MOST_CONSTRAINED_VARIABLE
+JW: JEROSLOW_WANG
+ALL: all kinds of heuristics in order''')
+
+    def set_input_file(file: str):
+        try:
+            f = open(file)
+            f.close()
+        except IOError:
+            sys.exit('The file does not exist or there is no access to it')
+        global input_file
+        input_file = file
+    def set_output_file(file: str):
+        try:
+            f = open(file)
+            f.close()
+        except IOError:
+            sys.exit('Invalid file name')
+        global output_file
+        output_file = file
+
+    for i in range(1, len(sys.argv), 2):
+        if len(sys.argv) - 1 == i:
+            sys.exit('There is no argument for the command ' + sys.argv[i])
+        match sys.argv[i]:
+            case '-heuristic':
+                set_heuristic_type(sys.argv[i + 1])
+            case '-input':
+                set_input_file(sys.argv[i + 1])
+            case '-output':
+                set_output_file(sys.argv[i + 1])
+            case _:
+                sys.exit('Invalid command ' + sys.argv[i])
 def main():
     global heuristic_type
     global input_file
     global output_file
-    if len(sys.argv) == 3:
-        heuristic_type = sys.argv[0]
-        input_file = sys.argv[1]
-        output_file = sys.argv[2]
+    if (len(sys.argv) == 2) and (sys.argv[1] == '--help'):
+        sys.exit(open('Help').read())
+    else:
+        if len(sys.argv) > 1:
+            executeCommand()
+
+        # print(sys.argv)
     with open(input_file, encoding='UTF-8') as f:
         args = f.readline().strip().split()
         g_args = []
@@ -279,9 +349,17 @@ def main():
             g_args.append([a[0] + a[1] for a in zip(xes, nums_of_arg)])
             g_vars.extend([a[0] + a[1] for a in zip([c.lower() for c in arg if c == 'X' or c == 'x'], nums_of_arg)])
         g_vars = sorted(list(set(g_vars)))
-    t = perf_counter()
-    dpll(g_args, g_vars)
-    print(perf_counter() - t)
+
+    if heuristic_type == 'ALL':
+        for heuristic in HeuristicType:
+            heuristic_type = heuristic
+            t = perf_counter()
+            dpll(g_args, g_vars)
+            print("{:<35}".format(heuristic.name + ':'), perf_counter() - t, sep='')
+    else:
+        t = perf_counter()
+        dpll(g_args, g_vars)
+        print("{:<35}".format(heuristic_type.name + ':'), perf_counter() - t, sep='')
 
 
 if __name__ == '__main__':
