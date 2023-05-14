@@ -166,6 +166,20 @@ def set_inter(inter, vars, var, bool):
 
 
 def base_dpll(clause, vars, inter, probabilities):
+    def trueBrunch() -> bool:
+        true_branch = gen_branch(clause, next_rec, True)
+        set_inter(inter, vars, next_rec.var, True)
+
+        if base_dpll(true_branch, vars, inter, recalculate_probabilities(clause, probabilities, vars, next_rec.var)):
+            return True
+    def falseBrunch() -> bool:
+        false_branch = gen_branch(clause, next_rec, False)
+        set_inter(inter, vars, next_rec.var, False)
+
+        if base_dpll(false_branch, vars, inter,
+                     recalculate_probabilities(clause, probabilities, vars, next_rec.var, is_false=True)):
+            return True
+
     if len(clause) == 0:
         with open("output.txt", 'w', encoding='UTF-8') as f:
             f.write(str(vars) + '\n')
@@ -178,19 +192,16 @@ def base_dpll(clause, vars, inter, probabilities):
 
     next_rec = get_next_rec(clause, vars, probabilities)
 
-    if next_rec.type == RecType.TRUE or next_rec.type == RecType.BOTH:
-        true_branch = gen_branch(clause, next_rec, True)
-        set_inter(inter, vars, next_rec.var, True)
-
-        if base_dpll(true_branch, vars, inter, recalculate_probabilities(clause, probabilities, vars, next_rec.var)):
+    if probabilities[vars.index(next_rec.var)] >= 0.5:
+        if (next_rec.type == RecType.TRUE or next_rec.type == RecType.BOTH) and trueBrunch():
+            return True
+        if next_rec.type == RecType.FALSE or next_rec.type == RecType.BOTH and falseBrunch():
             return True
 
-    if next_rec.type == RecType.FALSE or next_rec.type == RecType.BOTH:
-        false_branch = gen_branch(clause, next_rec, False)
-        set_inter(inter, vars, next_rec.var, False)
-
-        if base_dpll(false_branch, vars, inter,
-                     recalculate_probabilities(clause, probabilities, vars, next_rec.var, is_false=True)):
+    else:
+        if next_rec.type == RecType.FALSE or next_rec.type == RecType.BOTH and falseBrunch():
+            return True
+        if (next_rec.type == RecType.TRUE or next_rec.type == RecType.BOTH) and trueBrunch():
             return True
 
     return False
