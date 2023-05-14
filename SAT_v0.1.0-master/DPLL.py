@@ -120,7 +120,7 @@ def get_next_rec(clause: list[list[str]], vars: list[str], probabilities: list[f
         case HeuristicType.MAXIMUM_LIKELIHOOD_ESTIMATION:
             s = maximumLikelihoodEstimationHeuristic()
         case HeuristicType.MAXIMUM_POSTERIORI_ESTIMATION:
-            s = maximumPosterioriEstimationHeuristic()
+            s = maximumLikelihoodEstimationHeuristic()
         case HeuristicType.MOST_CONSTRAINED_VARIABLE:
             s = mostConstrainedVariableHeuristic()
         case HeuristicType.JEROSLOW_WANG:
@@ -214,12 +214,12 @@ def base_dpll(clause, vars, inter, probabilities):
         true_branch = gen_branch(clause, next_rec, True)
         set_inter(inter, vars, next_rec.var, True)
 
-        if heuristic_type == 'ST':
-            if base_dpll(true_branch, vars, inter, probabilities):
-                return True
-        else:
-            if base_dpll(true_branch, vars, inter, recalculate_probabilities(clause, probabilities, vars, next_rec.var)):
-                return True
+        # if heuristic_type == HeuristicType.STANDART_DPLL:
+        #     if base_dpll(true_branch, vars, inter, probabilities):
+        #         return True
+        # else:
+        #     if base_dpll(true_branch, vars, inter, recalculate_probabilities(clause, probabilities, vars, next_rec.var)):
+        #         return True
         if base_dpll(true_branch, vars, inter, recalculate_probabilities(clause, probabilities, vars, next_rec.var)):
             return True
 
@@ -227,19 +227,28 @@ def base_dpll(clause, vars, inter, probabilities):
         false_branch = gen_branch(clause, next_rec, False)
         set_inter(inter, vars, next_rec.var, False)
 
-        if heuristic_type == 'ST':
-            if base_dpll(false_branch, vars, inter, probabilities):
-                return True
-        else:
-            if base_dpll(false_branch, vars, inter, recalculate_probabilities(clause, probabilities, vars, next_rec.var, is_false=True)):
-                return True
+        # if heuristic_type == HeuristicType.STANDART_DPLL:
+        #     if base_dpll(false_branch, vars, inter, probabilities):
+        #         return True
+        # else:
+        #     if base_dpll(false_branch, vars, inter, recalculate_probabilities(clause, probabilities, vars, next_rec.var, is_false=True)):
+        #         return True
         if base_dpll(false_branch, vars, inter, recalculate_probabilities(clause, probabilities, vars, next_rec.var, is_false=True)):
             return True
 
     if len(clause) == 0:
-        with open(output_file, 'w', encoding='UTF-8') as f:
-            f.write(str(vars) + '\n')
-            f.write(str(inter) + '\n')
+        with open(output_file, 'a', encoding='UTF-8') as f:
+            f.write('|{:<35}|'.format(heuristic_type.name))
+            for value in inter:
+                if value is not None:
+                    f.write('{:<6}|'.format(value))
+                else:
+                    f.write('{:<6}|'.format('Any'))
+            f.write('\n')
+            # f.write(str(inter) + '\n')
+            for i in range(len(vars)*7 + 37):
+                f.write('-')
+            f.write('\n')
         return True
     else:
         for lit in clause:
@@ -277,15 +286,15 @@ def executeCommand():
     def set_heuristic_type(type: str):
         global heuristic_type
         match type:
-            case 'ST':
+            case HeuristicType.STANDART_DPLL.value:
                 heuristic_type = HeuristicType.STANDART_DPLL
-            case 'MLE':
+            case HeuristicType.MAXIMUM_LIKELIHOOD_ESTIMATION.value:
                 heuristic_type = HeuristicType.MAXIMUM_LIKELIHOOD_ESTIMATION
-            case 'MPE':
+            case HeuristicType.MAXIMUM_POSTERIORI_ESTIMATION.value:
                 heuristic_type = HeuristicType.MAXIMUM_POSTERIORI_ESTIMATION
-            case 'MCV':
+            case HeuristicType.MOST_CONSTRAINED_VARIABLE.value:
                 heuristic_type = HeuristicType.MOST_CONSTRAINED_VARIABLE
-            case 'JW':
+            case HeuristicType.JEROSLOW_WANG.value:
                 heuristic_type = HeuristicType.JEROSLOW_WANG
             case 'ALL':
                 heuristic_type = 'ALL'
@@ -339,7 +348,7 @@ def main():
             executeCommand()
 
         # print(sys.argv)
-    with open(input_file, encoding='UTF-8') as f:
+    with open(input_file, 'r', encoding='UTF-8') as f:
         args = f.readline().strip().split()
         g_args = []
         g_vars = []
@@ -350,11 +359,27 @@ def main():
             g_vars.extend([a[0] + a[1] for a in zip([c.lower() for c in arg if c == 'X' or c == 'x'], nums_of_arg)])
         g_vars = sorted(list(set(g_vars)))
 
+    with open(output_file, 'w', encoding='UTF-8') as f:
+        for i in range(len(g_vars) * 7 + 37):
+            f.write('-')
+        f.write('\n')
+        f.write('|{:<35}|'.format('HEURISTIC'))
+        for var in g_vars:
+            f.write('{:<6}|'.format(var))
+        f.write('\n')
+        # f.write(str(vars) + '\n')
+        for i in range(len(g_vars) * 7 + 37):
+            f.write('-')
+        f.write('\n')
+
     if heuristic_type == 'ALL':
+        times = []
         for heuristic in HeuristicType:
             heuristic_type = heuristic
             t = perf_counter()
+
             dpll(g_args, g_vars)
+            # times.append(perf_counter() - t)
             print("{:<35}".format(heuristic.name + ':'), perf_counter() - t, sep='')
     else:
         t = perf_counter()
