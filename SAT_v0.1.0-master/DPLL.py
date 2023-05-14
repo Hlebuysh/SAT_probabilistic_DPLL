@@ -38,6 +38,7 @@ class NextRec:
 heuristic_type = 'ALL'
 input_file = 'input.txt'
 output_file = 'output.txt'
+command_line_expression = False
 
 def simplify_cnf(clauses):
     simplified_clauses = [clause for clause in clauses if
@@ -316,6 +317,8 @@ ALL: all kinds of heuristics in order''')
             sys.exit('The file does not exist or there is no access to it')
         global input_file
         input_file = file
+
+
     def set_output_file(file: str):
         try:
             f = open(file)
@@ -325,28 +328,48 @@ ALL: all kinds of heuristics in order''')
         global output_file
         output_file = file
 
-    for i in range(1, len(sys.argv), 2):
+    def set_command_line_expression():
+        global command_line_expression
+        command_line_expression = True
+
+    i = 1
+    while i < len(sys.argv):
+        if sys.argv[i] == '--expression':
+            set_command_line_expression()
+            i += 1
+            continue
+
         if len(sys.argv) - 1 == i:
             sys.exit('There is no argument for the command ' + sys.argv[i])
         match sys.argv[i]:
-            case '-heuristic':
+            case '--heuristic':
                 set_heuristic_type(sys.argv[i + 1])
-            case '-input':
+                i += 2
+            case '--input':
                 set_input_file(sys.argv[i + 1])
-            case '-output':
+                i += 2
+            case '--output':
                 set_output_file(sys.argv[i + 1])
+                i += 2
             case _:
                 sys.exit('Invalid command ' + sys.argv[i])
+
+
 def main():
     global heuristic_type
     global input_file
     global output_file
-    if (len(sys.argv) == 2) and (sys.argv[1] == '--help'):
+    global command_line_expression
+    if (len(sys.argv) == 2) and (sys.argv[1] == '-help'):
         sys.exit(open('Help').read())
     else:
         if len(sys.argv) > 1:
             executeCommand()
 
+    if command_line_expression is True:
+        expression = input('Expression:\n')
+        with open(input_file, 'w', encoding='UTF-8') as f:
+            f.write(expression)
         # print(sys.argv)
     with open(input_file, 'r', encoding='UTF-8') as f:
         args = f.readline().strip().split()
