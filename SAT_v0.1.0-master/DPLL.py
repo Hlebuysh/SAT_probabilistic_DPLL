@@ -1,3 +1,4 @@
+import sys
 from enum import Enum, auto
 from time import perf_counter
 
@@ -27,6 +28,25 @@ class NextRec:
 # которая будет использоваться для дальнейшего выполнения алгоритма.
 
 
+heuristic_type = 'ST'
+input_file = 'input.txt'
+output_file = 'output.txt'
+
+def simplify_cnf(clauses):
+    simplified_clauses = [clause for clause in clauses if
+                          not any(literal.lower() in clause for literal in clause if literal.isupper())]
+
+    unit_clauses = [clause[0] for clause in simplified_clauses if len(clause) == 1 and clause[0].islower()]
+    while unit_clauses:
+        unit_literal = unit_clauses[0]
+        simplified_clauses = [clause for clause in simplified_clauses if unit_literal not in clause]
+        simplified_clauses = [[literal for literal in clause if literal != unit_literal.upper()] for clause in
+                              simplified_clauses]
+        unit_clauses = [clause[0] for clause in simplified_clauses if len(clause) == 1 and clause[0].islower()]
+
+    return simplified_clauses
+
+
 def get_next_rec(clause: list[list[str]], vars: list[str], probabilities: list[float]) -> NextRec:
     def maximumLikelihoodEstimationHeuristic() -> str:
         clause_vars = {literal.lower() for disjunction in clause for literal in disjunction}
@@ -35,7 +55,7 @@ def get_next_rec(clause: list[list[str]], vars: list[str], probabilities: list[f
         close_probability = probabilities[0]
         for i in range(1, len(vars)):
             if vars[i] in clause_vars and min(probabilities[i], 1 - probabilities[i]) < min(close_probability,
-                                                                                             1 - close_probability):
+                                                                                            1 - close_probability):
                 variable = vars[i]
                 close_probability = probabilities[i]
         return variable
@@ -86,8 +106,19 @@ def get_next_rec(clause: list[list[str]], vars: list[str], probabilities: list[f
         for disjunction in clause:
             for literal in disjunction:
                 return literal.lower()
-
-    return NextRec(JeroslowWangHeuristic(), RecType.BOTH)
+    s = ''
+    match heuristic_type:
+        case 'ST':
+            s = standartDPLL()
+        case 'MLE':
+            s = maximumLikelihoodEstimationHeuristic()
+        case 'MPE':
+            s = maximumPosterioriEstimationHeuristic()
+        case 'MCV':
+            s = mostConstrainedVariableHeuristic()
+        case 'JW':
+            s = JeroslowWangHeuristic()
+    return NextRec(s, RecType.BOTH)
 
 
 def recalculate_probabilities(clauses: list[list[str]], probabilities: list[float], variables: list[str], variable: str,
@@ -149,7 +180,7 @@ def gen_branch(clause, next_rec, bool):
             if (biba := next_rec.var.upper()) in temp:
                 temp.remove(biba)
 
-            if not (temp in branch):
+            if temp not in branch:
                 branch.append(temp)
     else:
         for lit in clause:
@@ -159,7 +190,7 @@ def gen_branch(clause, next_rec, bool):
             if (biba := next_rec.var) in temp:
                 temp.remove(biba)
 
-            if not (temp in branch):
+            if temp not in branch:
                 branch.append(temp)
 
     return branch
@@ -176,18 +207,26 @@ def base_dpll(clause, vars, inter, probabilities):
         true_branch = gen_branch(clause, next_rec, True)
         set_inter(inter, vars, next_rec.var, True)
 
-        if base_dpll(true_branch, vars, inter, recalculate_probabilities(clause, probabilities, vars, next_rec.var)):
-            return True
+        if heuristic_type == 'ST':
+            if base_dpll(true_branch, vars, inter, probabilities):
+                return True
+        else:
+            if base_dpll(true_branch, vars, inter, recalculate_probabilities(clause, probabilities, vars, next_rec.var)):
+                return True
+
     def falseBrunch() -> bool:
         false_branch = gen_branch(clause, next_rec, False)
         set_inter(inter, vars, next_rec.var, False)
 
-        if base_dpll(false_branch, vars, inter,
-                     recalculate_probabilities(clause, probabilities, vars, next_rec.var, is_false=True)):
-            return True
+        if heuristic_type == 'ST':
+            if base_dpll(false_branch, vars, inter, probabilities):
+                return True
+        else:
+            if base_dpll(false_branch, vars, inter, probabilities):
+                return True
 
     if len(clause) == 0:
-        with open("output.txt", 'w', encoding='UTF-8') as f:
+        with open(output_file, 'w', encoding='UTF-8') as f:
             f.write(str(vars) + '\n')
             f.write(str(inter) + '\n')
         return True
@@ -195,7 +234,7 @@ def base_dpll(clause, vars, inter, probabilities):
         for lit in clause:
             if not lit:
                 return False
-
+    # clause = simplify_cnf(clause)
     next_rec = get_next_rec(clause, vars, probabilities)
 
     if probabilities[vars.index(next_rec.var)] >= 0.5:
@@ -222,9 +261,15 @@ def dpll(clause, vars):
     base_dpll(clause, vars, inter, probabilities)
     return
 
-
 def main():
-    with open('input.txt', encoding='UTF-8') as f:
+    global heuristic_type
+    global input_file
+    global output_file
+    if len(sys.argv) == 3:
+        heuristic_type = sys.argv[0]
+        input_file = sys.argv[1]
+        output_file = sys.argv[2]
+    with open(input_file, encoding='UTF-8') as f:
         args = f.readline().strip().split()
         g_args = []
         g_vars = []

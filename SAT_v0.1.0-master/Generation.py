@@ -56,3 +56,13 @@ print(cnf_expr)
 print(transform_formula(str(cnf_expr)))
 with open('input.txt', 'w+', encoding='UTF-8') as f:
     f.write(transform_formula(str(cnf_expr)))
+
+
+def generate_cnf(vars_count: int, disjunctions_count: int, min_disjunction_variables=1, max_disjunction_variables=100):
+    vars = ['x'+str(i) for i in range(vars_count)]
+    result = ''
+    for i in range(disjunctions_count):
+        for j in range(random.randint(min_disjunction_variables, max_disjunction_variables)):
+            result += random.choice(vars)
+        result += ' '
+    return result
