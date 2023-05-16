@@ -1,6 +1,7 @@
 import sys
 from enum import Enum, auto
 from time import perf_counter
+from functools import cmp_to_key
 
 
 class RecType(Enum):
@@ -39,6 +40,35 @@ heuristic_type = 'ALL'
 input_file = 'input.txt'
 output_file = 'output.txt'
 command_line_expression = False
+iterations = 0
+variables = []
+values = []
+
+
+def compare_variables(var1: str, var2: str) -> bool:
+    return int(var1[1:]) < int(var2[1:])
+
+
+def sort_variables():
+    global variables
+    variables = sorted(variables, key=lambda x: int(x[1:]))
+
+
+def get_variable_index(name: str) -> int | None:
+    return int(name[1:])
+    start_element = 0
+    end_element = len(variables) - 1
+    n = int(name[1:])
+    while start_element <= end_element:
+        middle_element = start_element + (end_element - start_element) // 2
+        if variables[middle_element] == name:
+            return middle_element
+        elif compare_variables(variables[middle_element], name):
+            start_element = middle_element + 1
+        else:
+            end_element = middle_element - 1
+    return None
+
 
 def simplify_cnf(clauses):
     simplified_clauses = [clause for clause in clauses if
@@ -55,60 +85,52 @@ def simplify_cnf(clauses):
     return simplified_clauses
 
 
-def get_next_rec(clause: list[list[str]], vars: list[str], probabilities: list[float]) -> NextRec:
+def get_next_rec(clause: list[list[str]], probabilities: list[float]) -> NextRec:
     def maximumLikelihoodEstimationHeuristic() -> str:
-        clause_vars = {literal.lower() for disjunction in clause for literal in disjunction}
+        max_variable = None
+        max_probability = -1
 
-        variable = vars[0]
-        close_probability = probabilities[0]
-        for i in range(1, len(vars)):
-            if vars[i] in clause_vars and min(probabilities[i], 1 - probabilities[i]) < min(close_probability,
-                                                                                            1 - close_probability):
-                variable = vars[i]
-                close_probability = probabilities[i]
-        return variable
-
-    def maximumPosterioriEstimationHeuristic() -> str:
-
-        clause_vars = {literal.lower() for disjunction in clause for literal in disjunction}
-        max_var = None
-        max_score = 0
-        for i in range(len(vars)):
-            if vars[i] in clause_vars:
-                prob_true = probabilities[i]
-                prob_false = 1 - prob_true
-                num_satisfied_true = len([disjunction
-                                          for disjunction in clause
-                                          if any(literal == vars[i]
-                                                 for literal in disjunction)])
-
-                num_satisfied_false = len([disjunction for disjunction in clause
-                                           if any(literal == vars[i].upper()
-                                                  for literal in disjunction)])
-
-                score = prob_true ** num_satisfied_true * prob_false ** num_satisfied_false
-
-                if score > max_score:
-                    max_score = score
-                    max_var = vars[i]
-
-        return max_var
-
-    def mostConstrainedVariableHeuristic():
-        var_counts = {}
-        for disjunction in clause:
-            for literal in disjunction:
-                var_counts[literal.lower()] = var_counts.get(literal.lower(), 0) + 1
-        sorted_vars = sorted(var_counts.items(), key=lambda x: x[1])
-        return sorted_vars[0][0]
-
-    def JeroslowWangHeuristic() -> str:
-        jw_scores = {}
         for disjunction in clause:
             for literal in disjunction:
                 var = literal.lower()
-                jw_scores[var] = jw_scores.get(var, 0) + probabilities[vars.index(var)] * 2 ** (-len(clause))
-        return max(jw_scores, key=jw_scores.get)
+                probability = probabilities[get_variable_index(var)]
+                if probability > max_probability:
+                    max_probability = probability
+                    max_variable = var
+
+        return max_variable
+    def maximumPosterioriEstimationHeuristic() -> str:
+        clause_vars = {literal.lower() for disjunction in clause for literal in disjunction}
+
+        variable = variables[0]
+        close_probability = probabilities[0]
+        for i in range(1, len(variables)):
+            if variables[i] in clause_vars and min(probabilities[i], 1 - probabilities[i]) < min(close_probability,
+                                                                                            1 - close_probability):
+                variable = variables[i]
+                close_probability = probabilities[i]
+        return variable
+
+    def mostConstrainedVariableHeuristic():
+        var_counts = [0] * len(variables)
+        for disjunction in clause:
+            for literal in disjunction:
+                ix = get_variable_index(literal.lower())
+                var_counts[ix] += 1
+        i_max = 0
+        for i in range(len(var_counts)):
+            if var_counts[i] > var_counts[i_max]:
+                i_max = i
+        return variables[i_max]
+
+    def JeroslowWangHeuristic() -> str:
+        jw_scores = [0] * len(variables)
+        for disjunction in clause:
+            for literal in disjunction:
+                ix = get_variable_index(literal.lower())
+                jw_scores[ix] += probabilities[ix] / len(clause)
+                # jw_scores[ix] += probabilities[ix] * 2 ** (10 - len(clause))
+        return variables[max(enumerate(jw_scores), key=lambda x: x[1])[0]]
 
     def standartDPLL() -> str:
         for disjunction in clause:
@@ -121,7 +143,7 @@ def get_next_rec(clause: list[list[str]], vars: list[str], probabilities: list[f
         case HeuristicType.MAXIMUM_LIKELIHOOD_ESTIMATION:
             s = maximumLikelihoodEstimationHeuristic()
         case HeuristicType.MAXIMUM_POSTERIORI_ESTIMATION:
-            s = maximumLikelihoodEstimationHeuristic()
+            s = maximumPosterioriEstimationHeuristic()
         case HeuristicType.MOST_CONSTRAINED_VARIABLE:
             s = mostConstrainedVariableHeuristic()
         case HeuristicType.JEROSLOW_WANG:
@@ -129,7 +151,7 @@ def get_next_rec(clause: list[list[str]], vars: list[str], probabilities: list[f
     return NextRec(s, RecType.BOTH)
 
 
-def recalculate_probabilities(clauses: list[list[str]], probabilities: list[float], variables: list[str], variable: str,
+def recalculate_probabilities(clauses: list[list[str]], probabilities: list[float], variable: str,
                               is_false=False) -> list[float]:
     relevant_clauses = []
     for clause in clauses:
@@ -204,50 +226,58 @@ def gen_branch(clause, next_rec, bool):
     return branch
 
 
-def set_inter(inter, vars, var, bool):
-    for i in range(len(vars)):
-        if vars[i] == var:
-            inter[i] = 1 if bool else 0
+def set_inter(var: str, is_true_brunch: bool):
+    values[get_variable_index(var)] = 1 if is_true_brunch else 0
+    
+
+def reset_inter(var):
+    values[get_variable_index(var)] = None
 
 
-def base_dpll(clause, vars, inter, probabilities):
+def base_dpll(clause, probabilities):
+    global variables
+    global values
+    global iterations
+    iterations += 1
     def trueBrunch() -> bool:
         true_branch = gen_branch(clause, next_rec, True)
-        set_inter(inter, vars, next_rec.var, True)
+        set_inter(next_rec.var, True)
 
         # if heuristic_type == HeuristicType.STANDART_DPLL:
-        #     if base_dpll(true_branch, vars, inter, probabilities):
+        #     if base_dpll(true_branch, probabilities):
         #         return True
         # else:
-        #     if base_dpll(true_branch, vars, inter, recalculate_probabilities(clause, probabilities, vars, next_rec.var)):
+        #     if base_dpll(true_branch, recalculate_probabilities(clause, probabilities, next_rec.var)):
         #         return True
-        if base_dpll(true_branch, vars, inter, recalculate_probabilities(clause, probabilities, vars, next_rec.var)):
+        if base_dpll(true_branch, recalculate_probabilities(clause, probabilities, next_rec.var)):
             return True
+        reset_inter(next_rec.var)
 
     def falseBrunch() -> bool:
         false_branch = gen_branch(clause, next_rec, False)
-        set_inter(inter, vars, next_rec.var, False)
+        set_inter(next_rec.var, False)
 
         # if heuristic_type == HeuristicType.STANDART_DPLL:
-        #     if base_dpll(false_branch, vars, inter, probabilities):
+        #     if base_dpll(false_branch, probabilities):
         #         return True
         # else:
-        #     if base_dpll(false_branch, vars, inter, recalculate_probabilities(clause, probabilities, vars, next_rec.var, is_false=True)):
+        #     if base_dpll(false_branch, recalculate_probabilities(clause, probabilities, next_rec.var, is_false=True)):
         #         return True
-        if base_dpll(false_branch, vars, inter, recalculate_probabilities(clause, probabilities, vars, next_rec.var, is_false=True)):
+        if base_dpll(false_branch, recalculate_probabilities(clause, probabilities, next_rec.var, is_false=True)):
             return True
+        reset_inter(next_rec.var)
 
     if len(clause) == 0:
         with open(output_file, 'a', encoding='UTF-8') as f:
-            f.write('|{:<35}|'.format(heuristic_type.name))
-            for value in inter:
+            f.write('|{:<35}|'.format(heuristic_type.name if type(heuristic_type) == HeuristicType else 'ALL'))
+            for value in values:
                 if value is not None:
                     f.write('{:<6}|'.format(value))
                 else:
                     f.write('{:<6}|'.format('Any'))
             f.write('\n')
-            # f.write(str(inter) + '\n')
-            for i in range(len(vars)*7 + 37):
+            # f.write(str(values) + '\n')
+            for i in range(len(variables)*7 + 37):
                 f.write('-')
             f.write('\n')
         return True
@@ -256,9 +286,9 @@ def base_dpll(clause, vars, inter, probabilities):
             if not lit:
                 return False
     # clause = simplify_cnf(clause)
-    next_rec = get_next_rec(clause, vars, probabilities)
+    next_rec = get_next_rec(clause, probabilities)
 
-    if probabilities[vars.index(next_rec.var)] >= 0.5:
+    if probabilities[get_variable_index(next_rec.var)] > 0.5:
         if (next_rec.type == RecType.TRUE or next_rec.type == RecType.BOTH) and trueBrunch():
             return True
         if next_rec.type == RecType.FALSE or next_rec.type == RecType.BOTH and falseBrunch():
@@ -273,13 +303,11 @@ def base_dpll(clause, vars, inter, probabilities):
     return False
 
 
-def dpll(clause, vars):
-    inter = []
-    probabilities = []
-    for _ in vars:
-        probabilities.append(0.5)
-        inter.append(None)
-    base_dpll(clause, vars, inter, probabilities)
+def dpll(clause):
+    global values
+    values = [None] * len(variables)
+    probabilities = [0.5] * len(variables)
+    base_dpll(clause, probabilities)
     return
 
 
@@ -360,6 +388,9 @@ def main():
     global input_file
     global output_file
     global command_line_expression
+    global iterations
+    global variables
+    
     if (len(sys.argv) == 2) and (sys.argv[1] == '--help'):
         sys.exit(open('Help').read())
     else:
@@ -380,34 +411,39 @@ def main():
             xes = [c for c in arg if c == 'X' or c == 'x']
             g_args.append([a[0] + a[1] for a in zip(xes, nums_of_arg)])
             g_vars.extend([a[0] + a[1] for a in zip([c.lower() for c in arg if c == 'X' or c == 'x'], nums_of_arg)])
-        g_vars = sorted(list(set(g_vars)))
+        g_vars = list(set(g_vars))
+        variables = g_vars
+        sort_variables()
+        g_vars = variables
+        variables = ['x'+str(i) for i in range(len(g_vars))]
 
     with open(output_file, 'w', encoding='UTF-8') as f:
-        for i in range(len(g_vars) * 7 + 37):
+        for i in range(len(variables) * 7 + 37):
             f.write('-')
         f.write('\n')
         f.write('|{:<35}|'.format('HEURISTIC'))
         for var in g_vars:
             f.write('{:<6}|'.format(var))
         f.write('\n')
-        # f.write(str(vars) + '\n')
-        for i in range(len(g_vars) * 7 + 37):
+        # f.write(str(variables) + '\n')
+        for i in range(len(variables) * 7 + 37):
             f.write('-')
         f.write('\n')
 
     if heuristic_type == 'ALL':
-        times = []
         for heuristic in HeuristicType:
+            iterations = 0
             heuristic_type = heuristic
             t = perf_counter()
 
-            dpll(g_args, g_vars)
+            dpll(g_args)
             # times.append(perf_counter() - t)
-            print("{:<35}".format(heuristic.name + ':'), perf_counter() - t, sep='')
+            print("{:<35}{:<15.5f}".format(heuristic.name + ':', perf_counter() - t), iterations, sep='')
     else:
+        iterations = 0
         t = perf_counter()
-        dpll(g_args, g_vars)
-        print("{:<35}".format(heuristic_type.name + ':'), perf_counter() - t, sep='')
+        dpll(g_args)
+        print("{:<35}{:<15.5f}".format(heuristic_type.name + ':', perf_counter() - t), iterations, sep='')
 
 
 if __name__ == '__main__':

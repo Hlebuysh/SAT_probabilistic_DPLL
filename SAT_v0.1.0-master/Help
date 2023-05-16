@@ -17,6 +17,6 @@ is written as:
 x1x2 X2 X1x2X3
 
 Output format:
-If cnf is solvable, the program will output a list of variables with their corresponding values.
+If CNF is solvable, the program will output a list of variables with their corresponding values.
 Any means that with the other values set, the value of this variable is not important.
 In the console, the program displays the time it took for the algorithm to work.
