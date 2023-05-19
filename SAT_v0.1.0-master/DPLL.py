@@ -1,39 +1,6 @@
 import sys
-from enum import Enum, auto
 from time import perf_counter
-from functools import cmp_to_key
-
-
-class RecType(Enum):
-    FALSE = auto()
-    TRUE = auto()
-    BOTH = auto()
-
-class HeuristicType(Enum):
-    STANDART_DPLL = 'ST'
-    MAXIMUM_LIKELIHOOD_ESTIMATION = 'MLE'
-    MAXIMUM_POSTERIORI_ESTIMATION = 'MPE'
-    MOST_CONSTRAINED_VARIABLE = 'MCV'
-    JEROSLOW_WANG = 'JW'
-
-
-## RecType используется для определения типов записей (record types) в NextRec,
-# чтобы указать, какие ветви должны быть продолжены в алгоритме DPLL.
-## RecType определяет три возможных значения: FALSE, TRUE и BOTH, которые указывают,
-# должны ли ветви быть продолжены, только если литерал является ложным, только если он истинен, или в обоих случаях.
-## RecType не используется явно где-либо в коде. Однако он используется неявно в методе get_next_rec,
-# который возвращает объект NextRec, содержащий литерал и его тип (одно из значений RecType).
-## Позже этот объект используется в функции gen_branch, которая определяет,
-# какие литералы должны быть добавлены к ветви, в зависимости от типа NextRec.
-
-class NextRec:
-    def __init__(self, var, rec_type):
-        self.var = var
-        self.type = rec_type
-
-
-## С помощью класса NextRec мы можем получить следующую переменную,
-# которая будет использоваться для дальнейшего выполнения алгоритма.
+from DPLL_classes import *
 
 
 heuristic_type = 'ALL'
@@ -117,11 +84,13 @@ def get_next_rec(clause: list[list[str]], probabilities: list[float]) -> NextRec
             for literal in disjunction:
                 ix = get_variable_index(literal.lower())
                 var_counts[ix] += 1
-        i_max = 0
-        for i in range(len(var_counts)):
-            if var_counts[i] > var_counts[i_max]:
-                i_max = i
-        return variables[i_max]
+        i_min = 0
+        while var_counts[i_min] == 0:
+            i_min += 1
+        for i in range(i_min, len(var_counts)):
+            if (var_counts[i] != 0) and (var_counts[i] < var_counts[i_min]):
+                i_min = i
+        return variables[i_min]
 
     def JeroslowWangHeuristic() -> str:
         jw_scores = [0] * len(variables)
@@ -403,7 +372,7 @@ def main():
             f.write(expression)
         # print(sys.argv)
     with open(input_file, 'r', encoding='UTF-8') as f:
-        args = f.readline().strip().split()
+        args = list(set(f.readline().strip().split()))
         g_args = []
         g_vars = []
         for arg in args:
@@ -429,6 +398,13 @@ def main():
         for i in range(len(variables) * 7 + 37):
             f.write('-')
         f.write('\n')
+
+    for i in range(len(g_args)):
+        for j in range(len(g_args[i])):
+            if g_args[i][j][0] == 'x':
+                g_args[i][j] = variables[g_vars.index(g_args[i][j])]
+            else:
+                g_args[i][j] = variables[g_vars.index(g_args[i][j].lower())].upper()
 
     if heuristic_type == 'ALL':
         for heuristic in HeuristicType:

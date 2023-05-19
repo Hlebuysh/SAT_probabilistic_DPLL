@@ -51,7 +51,7 @@ def transform_formula(formula_str):
 
 
 # Пример использования
-cnf_expr = generate_knf_formula(700, 4000, 20)
+cnf_expr = generate_knf_formula(500, 1000, 2)
 print(cnf_expr)
 print(transform_formula(str(cnf_expr)))
 with open('input.txt', 'w+', encoding='UTF-8') as f:
