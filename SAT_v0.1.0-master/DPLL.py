@@ -1,9 +1,11 @@
 import sys
 from time import perf_counter
 from DPLL_classes import *
+import random
 
 
 heuristic_type = 'ALL'
+evolution_type = 'ALL'
 input_file = 'input.txt'
 output_file = 'output.txt'
 command_line_expression = False
@@ -88,7 +90,7 @@ def get_next_rec(clause: list[list[str]], probabilities: list[float]) -> NextRec
         while var_counts[i_min] == 0:
             i_min += 1
         for i in range(i_min, len(var_counts)):
-            if (var_counts[i] != 0) and (var_counts[i] < var_counts[i_min]):
+            if (var_counts[i] != 0) and (var_counts[i] > var_counts[i_min]):
                 i_min = i
         return variables[i_min]
 
@@ -105,7 +107,10 @@ def get_next_rec(clause: list[list[str]], probabilities: list[float]) -> NextRec
         for disjunction in clause:
             for literal in disjunction:
                 return literal.lower()
+
+
     s = ''
+
     match heuristic_type:
         case HeuristicType.STANDART_DPLL:
             s = standartDPLL()
@@ -118,6 +123,44 @@ def get_next_rec(clause: list[list[str]], probabilities: list[float]) -> NextRec
         case HeuristicType.JEROSLOW_WANG:
             s = JeroslowWangHeuristic()
     return NextRec(s, RecType.BOTH)
+
+
+
+def evolutionAlgorithm(clauses: list[list[str]]) -> dict:
+    global variables
+
+    def random_assignment():
+        return {var: random.choice([True, False]) for var in variables}
+
+    def evaluate_clause(clause, assignment):
+        return any(assignment[var] if var[0] != '-' else not assignment[var[1:]] for var in clause)
+
+    def evaluate_formula(assignment):
+        return all(evaluate_clause(clause, assignment) for clause in clauses)
+
+    def walkSAT(max_flips=1000, max_tries=100):
+        lowercase_variables = set(var.lower() for clause in clauses for var in clause)
+
+        for _ in range(max_tries):
+            assignment = random_assignment(lowercase_variables)
+            for _ in range(max_flips):
+                if evaluate_formula(clauses, assignment):
+                    return assignment  # Found a satisfying assignment
+
+                unsatisfied_clauses = [clause for clause in clauses if not evaluate_clause(clause, assignment)]
+
+                # Choose a clause randomly from unsatisfied clauses
+                clause = random.choice(unsatisfied_clauses)
+
+                # Choose a variable from the clause to flip
+                var_to_flip = random.choice(clause)
+                assignment[var_to_flip.lower()] = not assignment[var_to_flip.lower()]
+
+        return None  # No satisfying assignment found within the given limits
+
+    match evolution_type:
+        case EvolutionType.LOCAL_SEARCH:
+            walkSAT()
 
 
 def recalculate_probabilities(clauses: list[list[str]], probabilities: list[float], variable: str,
@@ -199,15 +242,16 @@ def set_inter(var: str, is_true_brunch: bool):
     values[get_variable_index(var)] = 1 if is_true_brunch else 0
     
 
-def reset_inter(var):
+def reset_inter(var: str):
     values[get_variable_index(var)] = None
 
 
-def base_dpll(clause, probabilities):
+def base_dpll(clause: list[list[str]], probabilities: list[float]) -> bool:
     global variables
     global values
     global iterations
     iterations += 1
+
     def trueBrunch() -> bool:
         true_branch = gen_branch(clause, next_rec, True)
         set_inter(next_rec.var, True)
@@ -272,7 +316,7 @@ def base_dpll(clause, probabilities):
     return False
 
 
-def dpll(clause):
+def dpll(clause: list[list[str]]):
     global values
     values = [None] * len(variables)
     probabilities = [0.5] * len(variables)
@@ -281,6 +325,13 @@ def dpll(clause):
 
 
 def executeCommand():
+
+    def set_evolution_algorithm_type(type = 'LS'):
+        global evolution_type
+        match type:
+            case EvolutionType.LOCAL_SEARCH.value:
+                evolution_type = EvolutionType.LOCAL_SEARCH
+
     def set_heuristic_type(type: str):
         global heuristic_type
         match type:
@@ -353,6 +404,7 @@ ALL: all kinds of heuristics in order''')
 
 
 def main():
+    sys.setrecursionlimit(100000)
     global heuristic_type
     global input_file
     global output_file

@@ -14,6 +14,9 @@ class HeuristicType(Enum):
     MOST_CONSTRAINED_VARIABLE = 'MCV'
     JEROSLOW_WANG = 'JW'
 
+class EvolutionType(Enum):
+    LOCAL_SEARCH = 'LS'
+
 
 class NextRec:
     def __init__(self, var, rec_type):
