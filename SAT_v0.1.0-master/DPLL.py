@@ -198,6 +198,8 @@ def transform_to_continuous_formula(clauses: list[list[str]]):
 
 def evolutionAlgorithm():
     global continuous_formula
+    global values
+    global variables
     def gradientDescent():
         global variables
         global values
@@ -218,6 +220,22 @@ def evolutionAlgorithm():
     match evolution_type:
         case EvolutionType.GRADIENT_DESCENT:
             return gradientDescent()
+
+    with open(output_file, 'a', encoding='UTF-8') as f:
+        f.write('|{:<35}|'.format(EvolutionType(evolution_type).name if type(evolution_type) == EvolutionType else 'ALL'))
+        for value in values:
+            if value is not None:
+                f.write('{:<6}|'.format(value))
+            else:
+                f.write('{:<6}|'.format('Any'))
+        f.write('\n')
+        # f.write(str(values) + '\n')
+        for i in range(len(variables) * 7 + 37):
+            f.write('-')
+        f.write('\n')
+
+
+
 
 
 
@@ -376,11 +394,11 @@ def base_dpll(clause: list[list[str]], probabilities: list[float]) -> bool:
 
 def dpll(clause: list[list[str]]):
     global values
-    values = [None] * len(variables)
     if evolution_type is not None:
         transform_to_continuous_formula(clause)
         evolutionAlgorithm()
         return
+    values = [None] * len(variables)
     probabilities = [0.5] * len(variables)
     base_dpll(clause, probabilities)
     return
@@ -521,7 +539,7 @@ def main():
             else:
                 g_args[i][j] = variables[g_vars.index(g_args[i][j].lower())].upper()
 
-    if heuristic_type == 'ALL':
+    if heuristic_type == 'ALL' and (evolution_type is None):
         for heuristic in HeuristicType:
             iterations = 0
             heuristic_type = heuristic
@@ -534,7 +552,11 @@ def main():
         iterations = 0
         t = perf_counter()
         dpll(g_args)
-        print("{:<35}{:<15.5f}".format(heuristic_type.name + ':', perf_counter() - t), iterations, sep='')
+        if evolution_type is not None:
+            name = str(EvolutionType(evolution_type).name)
+        else:
+            name = str(HeuristicType(heuristic_type).name)
+        print("{:<35}{:<15.5f}".format(name + ':', perf_counter() - t), iterations, sep='')
 
 
 if __name__ == '__main__':
