@@ -15,7 +15,7 @@ class HeuristicType(Enum):
     JEROSLOW_WANG = 'JW'
 
 class EvolutionType(Enum):
-    LOCAL_SEARCH = 'LS'
+    GRADIENT_DESCENT = 'GD'
 
 
 class NextRec:

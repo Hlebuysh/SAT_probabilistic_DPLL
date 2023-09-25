@@ -1,17 +1,21 @@
 import sys
 from time import perf_counter
 from DPLL_classes import *
-import random
+from scipy.optimize import minimize
+import numpy
+
+# import random
 
 
 heuristic_type = 'ALL'
-evolution_type = 'ALL'
+evolution_type = None
 input_file = 'input.txt'
 output_file = 'output.txt'
 command_line_expression = False
 iterations = 0
 variables = []
 values = []
+continuous_formula = ""
 
 
 def compare_variables(var1: str, var2: str) -> bool:
@@ -68,6 +72,7 @@ def get_next_rec(clause: list[list[str]], probabilities: list[float]) -> NextRec
                     max_variable = var
 
         return max_variable
+
     def maximumPosterioriEstimationHeuristic() -> str:
         clause_vars = {literal.lower() for disjunction in clause for literal in disjunction}
 
@@ -75,7 +80,7 @@ def get_next_rec(clause: list[list[str]], probabilities: list[float]) -> NextRec
         close_probability = probabilities[0]
         for i in range(1, len(variables)):
             if variables[i] in clause_vars and min(probabilities[i], 1 - probabilities[i]) < min(close_probability,
-                                                                                            1 - close_probability):
+                                                                                                 1 - close_probability):
                 variable = variables[i]
                 close_probability = probabilities[i]
         return variable
@@ -108,7 +113,6 @@ def get_next_rec(clause: list[list[str]], probabilities: list[float]) -> NextRec
             for literal in disjunction:
                 return literal.lower()
 
-
     s = ''
 
     match heuristic_type:
@@ -125,42 +129,96 @@ def get_next_rec(clause: list[list[str]], probabilities: list[float]) -> NextRec
     return NextRec(s, RecType.BOTH)
 
 
+# def evolutionAlgorithm(clauses: list[list[str]]) -> dict:
+#     global variables
+#
+#     def random_assignment():
+#         return {var: random.choice([True, False]) for var in variables}
+#
+#     def evaluate_clause(clause, assignment):
+#         return any(assignment[var] if var[0] != '-' else not assignment[var[1:]] for var in clause)
+#
+#     def evaluate_formula(assignment):
+#         return all(evaluate_clause(clause, assignment) for clause in clauses)
+#
+#     def walkSAT(max_flips=1000, max_tries=100):
+#         lowercase_variables = set(var.lower() for clause in clauses for var in clause)
+#
+#         for _ in range(max_tries):
+#             assignment = random_assignment(lowercase_variables)
+#             for _ in range(max_flips):
+#                 if evaluate_formula(clauses, assignment):
+#                     return assignment  # Found a satisfying assignment
+#
+#                 unsatisfied_clauses = [clause for clause in clauses if not evaluate_clause(clause, assignment)]
+#
+#                 # Choose a clause randomly from unsatisfied clauses
+#                 clause = random.choice(unsatisfied_clauses)
+#
+#                 # Choose a variable from the clause to flip
+#                 var_to_flip = random.choice(clause)
+#                 assignment[var_to_flip.lower()] = not assignment[var_to_flip.lower()]
+#
+#         return None  # No satisfying assignment found within the given limits
+#
+#     match evolution_type:
+#
+#         case EvolutionType.LOCAL_SEARCH:
+#             walkSAT()
 
-def evolutionAlgorithm(clauses: list[list[str]]) -> dict:
-    global variables
+# def transform_to_continuous(x, K=10):
+#     return f"(1 / (1 + np.exp(-{K}*({x}))))"
 
-    def random_assignment():
-        return {var: random.choice([True, False]) for var in variables}
+def transform_to_continuous_formula(clauses: list[list[str]]):
+    global continuous_formula
 
-    def evaluate_clause(clause, assignment):
-        return any(assignment[var] if var[0] != '-' else not assignment[var[1:]] for var in clause)
+    for clause in clauses:
+        continuous_clause = ""
+        for literal in clause:
+            is_negative = literal[0] == 'X'
+            variable_num = int(literal[1:])
+            variable_value = values[variable_num] if variable_num < len(values) else None
 
-    def evaluate_formula(assignment):
-        return all(evaluate_clause(clause, assignment) for clause in clauses)
+            if variable_value is not None:
+                if (is_negative and variable_value) or (not is_negative and not variable_value):
+                    continuous_clause += f"(1 / (1 + __import__('numpy').exp(-({variables[variable_num]})))) * "
+                else:
+                    continue
+            elif is_negative:
+                continuous_clause += f"(1 - (1 / (1 + __import__('numpy').exp(-({variables[variable_num]}))))) * "
+            else:
+                continuous_clause += f"(1 / (1 + __import__('numpy').exp(-({variables[variable_num]})))) * "
 
-    def walkSAT(max_flips=1000, max_tries=100):
-        lowercase_variables = set(var.lower() for clause in clauses for var in clause)
+        if continuous_clause:
+            continuous_formula += f"({continuous_clause[:-3]}) + "
 
-        for _ in range(max_tries):
-            assignment = random_assignment(lowercase_variables)
-            for _ in range(max_flips):
-                if evaluate_formula(clauses, assignment):
-                    return assignment  # Found a satisfying assignment
+    if continuous_formula:
+        continuous_formula = continuous_formula[:-3]
 
-                unsatisfied_clauses = [clause for clause in clauses if not evaluate_clause(clause, assignment)]
 
-                # Choose a clause randomly from unsatisfied clauses
-                clause = random.choice(unsatisfied_clauses)
+def evolutionAlgorithm():
+    global continuous_formula
+    def gradientDescent():
+        global variables
+        global values
+        def objective(x):
+            return -eval(continuous_formula, {variables[i]: x[i] for i in range(len(x))})
 
-                # Choose a variable from the clause to flip
-                var_to_flip = random.choice(clause)
-                assignment[var_to_flip.lower()] = not assignment[var_to_flip.lower()]
+        initial_values = numpy.zeros(len(variables))
 
-        return None  # No satisfying assignment found within the given limits
+        bounds = [(0, 1)] * len(variables)
+
+        result = minimize(objective, initial_values, method='L-BFGS-B', bounds=bounds)
+
+        if result.success is not False:
+            values = result.x
+        else:
+            return False
 
     match evolution_type:
-        case EvolutionType.LOCAL_SEARCH:
-            walkSAT()
+        case EvolutionType.GRADIENT_DESCENT:
+            return gradientDescent()
+
 
 
 def recalculate_probabilities(clauses: list[list[str]], probabilities: list[float], variable: str,
@@ -240,7 +298,7 @@ def gen_branch(clause, next_rec, bool):
 
 def set_inter(var: str, is_true_brunch: bool):
     values[get_variable_index(var)] = 1 if is_true_brunch else 0
-    
+
 
 def reset_inter(var: str):
     values[get_variable_index(var)] = None
@@ -290,7 +348,7 @@ def base_dpll(clause: list[list[str]], probabilities: list[float]) -> bool:
                     f.write('{:<6}|'.format('Any'))
             f.write('\n')
             # f.write(str(values) + '\n')
-            for i in range(len(variables)*7 + 37):
+            for i in range(len(variables) * 7 + 37):
                 f.write('-')
             f.write('\n')
         return True
@@ -319,18 +377,21 @@ def base_dpll(clause: list[list[str]], probabilities: list[float]) -> bool:
 def dpll(clause: list[list[str]]):
     global values
     values = [None] * len(variables)
+    if evolution_type is not None:
+        transform_to_continuous_formula(clause)
+        evolutionAlgorithm()
+        return
     probabilities = [0.5] * len(variables)
     base_dpll(clause, probabilities)
     return
 
 
 def executeCommand():
-
-    def set_evolution_algorithm_type(type = 'LS'):
+    def set_evolution_algorithm_type(type='LS'):
         global evolution_type
         match type:
-            case EvolutionType.LOCAL_SEARCH.value:
-                evolution_type = EvolutionType.LOCAL_SEARCH
+            case EvolutionType.GRADIENT_DESCENT.value:
+                evolution_type = EvolutionType.GRADIENT_DESCENT
 
     def set_heuristic_type(type: str):
         global heuristic_type
@@ -366,7 +427,6 @@ ALL: all kinds of heuristics in order''')
         global input_file
         input_file = file
 
-
     def set_output_file(file: str):
         try:
             f = open(file)
@@ -393,6 +453,9 @@ ALL: all kinds of heuristics in order''')
             case '-heuristic':
                 set_heuristic_type(sys.argv[i + 1])
                 i += 2
+            case '-evolution_algorithm':
+                set_evolution_algorithm_type(sys.argv[i + 1])
+                i += 2
             case '-input':
                 set_input_file(sys.argv[i + 1])
                 i += 2
@@ -411,7 +474,7 @@ def main():
     global command_line_expression
     global iterations
     global variables
-    
+
     if (len(sys.argv) == 2) and (sys.argv[1] == '--help'):
         sys.exit(open('Help').read())
     else:
@@ -436,7 +499,7 @@ def main():
         variables = g_vars
         sort_variables()
         g_vars = variables
-        variables = ['x'+str(i) for i in range(len(g_vars))]
+        variables = ['x' + str(i) for i in range(len(g_vars))]
 
     with open(output_file, 'w', encoding='UTF-8') as f:
         for i in range(len(variables) * 7 + 37):
