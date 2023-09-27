@@ -319,7 +319,6 @@ def evolutionAlgorithm(clauses: list[list[str]]):
             grad = gradient()
             values -= learning_rate * grad
             if objective_function() == len(clauses):
-                values = grad
                 return True
         return False
 
@@ -363,6 +362,7 @@ def evolutionAlgorithm(clauses: list[list[str]]):
                     best_energy = current_energy
 
 
+
     match evolution_type:
         case EvolutionType.GRADIENT_DESCENT:
             return gradientDescent()
@@ -370,11 +370,16 @@ def evolutionAlgorithm(clauses: list[list[str]]):
             return simulatedAnnealing()
 
 
+
+
+
+
+def print_result():
     with open(output_file, 'a', encoding='UTF-8') as f:
         f.write('|{:<35}|'.format(EvolutionType(evolution_type).name if type(evolution_type) == EvolutionType else 'ALL'))
         for value in values:
             if value is not None:
-                f.write('{:<6}|'.format(value))
+                f.write('{:<6}|'.format(not (not value)))
             else:
                 f.write('{:<6}|'.format('Any'))
         f.write('\n')
@@ -382,11 +387,6 @@ def evolutionAlgorithm(clauses: list[list[str]]):
         for i in range(len(variables) * 7 + 37):
             f.write('-')
         f.write('\n')
-
-
-
-
-
 
 def recalculate_probabilities(clauses: list[list[str]], probabilities: list[float], variable: str,
                               is_false=False) -> list[float]:
@@ -547,6 +547,7 @@ def dpll(clause: list[list[str]]):
     if evolution_type is not None:
         transform_to_continuous_formula(clause)
         evolutionAlgorithm(clause)
+        print_result()
         return
     probabilities = [0.5] * len(variables)
     base_dpll(clause, probabilities)
