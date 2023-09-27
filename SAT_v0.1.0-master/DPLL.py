@@ -296,8 +296,8 @@ def evolutionAlgorithm(clauses: list[list[str]]):
                 is_negated = (literal[0] == 'X')
                 variable_index = get_variable_index(literal)
 
-                if (values[variable_index] is None and not is_negated) or \
-                        (values[variable_index] is not None and is_negated):
+                if (values[variable_index] is not None) and \
+                        ((not values[variable_index]) != (not is_negated)):
                     clause_satisfied = True
 
             if not clause_satisfied:
