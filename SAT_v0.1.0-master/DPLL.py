@@ -299,6 +299,7 @@ def evolutionAlgorithm(clauses: list[list[str]]):
                 if (values[variable_index] is not None) and \
                         ((not values[variable_index]) != (not is_negated)):
                     clause_satisfied = True
+                    break
 
             if not clause_satisfied:
                 for literal in clause:
@@ -322,11 +323,51 @@ def evolutionAlgorithm(clauses: list[list[str]]):
                 return True
         return False
 
+    def energy_function():
+        return len(clauses) - objective_function()
+
+    def random_neighbor(current_state):
+        neighbor = current_state.copy()
+        index = random.randint(0, len(neighbor) - 1)
+        neighbor[index] = not neighbor[index]  # Flip the value of a random variable
+        return neighbor
+
+    def acceptance_probability(energy_diff, temperature):
+        if energy_diff < 0:
+            return 1.0
+        return math.exp(-energy_diff / temperature)
+
+    def simulatedAnnealing(initial_temperature=1.0, cooling_rate=0.001):
+        global values
+        initial_state = [random.choice([False, True]) for _ in range(len(variables))]
+        max_iterations = pow(2, len(clauses)*len(clauses[0]))
+        current_state = initial_state
+        current_energy = energy_function()
+        values = current_state
+        best_energy = current_energy
+
+        for iteration in range(max_iterations):
+            temperature = initial_temperature / (1 + cooling_rate * iteration)
+
+            neighbor = random_neighbor(current_state)
+            neighbor_energy = energy_function()
+
+            energy_diff = neighbor_energy - current_energy
+
+            if acceptance_probability(energy_diff, temperature) > random.random():
+                current_state = neighbor
+                current_energy = neighbor_energy
+
+                if current_energy > best_energy:
+                    values = current_state
+                    best_energy = current_energy
+
+
     match evolution_type:
         case EvolutionType.GRADIENT_DESCENT:
             return gradientDescent()
-        # case EvolutionType.SIMULATED_ANNEALING:
-        #     return simulatedAnnealing()
+        case EvolutionType.SIMULATED_ANNEALING:
+            return simulatedAnnealing()
 
 
     with open(output_file, 'a', encoding='UTF-8') as f:
@@ -518,6 +559,8 @@ def executeCommand():
         match type:
             case EvolutionType.GRADIENT_DESCENT.value:
                 evolution_type = EvolutionType.GRADIENT_DESCENT
+            case EvolutionType.SIMULATED_ANNEALING.value:
+                evolution_type = EvolutionType.SIMULATED_ANNEALING
 
     def set_heuristic_type(type: str):
         global heuristic_type
