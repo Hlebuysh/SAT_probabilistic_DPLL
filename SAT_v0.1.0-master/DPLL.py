@@ -4,8 +4,9 @@ from DPLL_classes import *
 from scipy.optimize import minimize
 import numpy
 
-# import random
 
+import random
+import math
 
 heuristic_type = 'ALL'
 evolution_type = None
@@ -181,13 +182,13 @@ def transform_to_continuous_formula(clauses: list[list[str]]):
 
             if variable_value is not None:
                 if (is_negative and variable_value) or (not is_negative and not variable_value):
-                    continuous_clause += f"(1 / (1 + __import__('numpy').exp(-({variables[variable_num]})))) * "
+                    continuous_clause += f"__import__('numpy').log(0) + "
                 else:
                     continue
             elif is_negative:
-                continuous_clause += f"(1 - (1 / (1 + __import__('numpy').exp(-({variables[variable_num]}))))) * "
+                continuous_clause += f"(__import__('numpy').log(1 - {variables[variable_num]})) * "
             else:
-                continuous_clause += f"(1 / (1 + __import__('numpy').exp(-({variables[variable_num]})))) * "
+                continuous_clause += f"(__import__('numpy').log({variables[variable_num]})) * "
 
         if continuous_clause:
             continuous_formula += f"({continuous_clause[:-3]}) + "
@@ -195,31 +196,138 @@ def transform_to_continuous_formula(clauses: list[list[str]]):
     if continuous_formula:
         continuous_formula = continuous_formula[:-3]
 
+    continuous_formula = f"({continuous_formula})"
 
-def evolutionAlgorithm():
+    # for clause in clauses:
+    #     continuous_clause = ""
+    #     for literal in clause:
+    #         is_negative = literal[0] == 'X'
+    #         variable_num = int(literal[1:])
+    #         variable_value = values[variable_num] if variable_num < len(values) else None
+    #
+    #         if variable_value is not None:
+    #             if (is_negative and variable_value) or (not is_negative and not variable_value):
+    #                 continuous_clause += f"(1 / (1 + __import__('numpy').exp(-({variables[variable_num]})))) * "
+    #             else:
+    #                 continue
+    #         elif is_negative:
+    #             continuous_clause += f"(1 - (1 / (1 + __import__('numpy').exp(-({variables[variable_num]}))))) * "
+    #         else:
+    #             continuous_clause += f"(1 / (1 + __import__('numpy').exp(-({variables[variable_num]})))) * "
+    #
+    #     if continuous_clause:
+    #         continuous_formula += f"({continuous_clause[:-3]}) + "
+    #
+    # if continuous_formula:
+    #     continuous_formula = continuous_formula[:-3]
+
+
+def evolutionAlgorithm(clauses: list[list[str]]):
     global continuous_formula
     global values
     global variables
-    def gradientDescent():
-        global variables
+    # def gradientDescent():
+    #     global variables
+    #     global values
+    #     def objective(x):
+    #         return -eval(continuous_formula, {variables[i]: x[i] for i in range(len(x))})
+    #     initial_values = numpy.zeros(len(variables))
+    #     bounds = [(1e-100, 1)] * len(variables)
+    #     result = minimize(objective, initial_values, method='L-BFGS-B', bounds=bounds)
+    #
+    #     if result.success is not False:
+    #         values = result.x
+    #     else:
+    #         return False
+    #
+    # def simulated_annealing():
+    #     def evaluate_expression():
+    #         result = eval(continuous_formula,
+    #                       {variables[i]: values[i] for i in range(len(variables))})
+    #         return result
+    #
+    #     global continuous_formula
+    #     current_state = [random.random(), random.random(), random.random()]
+    #     current_energy = evaluate_expression(current_state, continuous_formula)
+    #
+    #     # Начальная температура и параметры алгоритма
+    #     initial_temperature = 100.0
+    #     cooling_rate = 0.995
+    #
+    #     # Цикл оптимизации
+    #     while initial_temperature > 0.01:
+    #         # Генерация нового состояния
+    #         new_state = [random.random(), random.random(), random.random()]
+    #         new_energy = evaluate_expression(new_state, continuous_formula)
+    #
+    #         delta_energy = new_energy - current_energy
+    #
+    #         # Если новое состояние лучше, принимаем его
+    #         if delta_energy < 0 or random.random() < math.exp(-delta_energy / initial_temperature):
+    #             current_state = new_state
+    #             current_energy = new_energy
+    #
+    #         # Уменьшаем температуру
+    #         initial_temperature *= cooling_rate
+    #
+    #     return current_state, current_energy
+
+    def objective_function():
+        num_satisfied_clauses = 0
+
+        for clause in clauses:
+            for literal in clause:
+                is_negated = (literal[0] == 'X')
+                variable_index = get_variable_index(literal)
+
+                if (values[variable_index] is not None) and \
+                        ((not values[variable_index]) != (not is_negated)):
+                    num_satisfied_clauses += 1
+                    break
+        return num_satisfied_clauses
+
+    def gradient():
+        grad = numpy.zeros(len(variables))
+
+        for clause in clauses:
+            clause_satisfied = False
+
+            for literal in clause:
+                is_negated = (literal[0] == 'X')
+                variable_index = get_variable_index(literal)
+
+                if (values[variable_index] is None and not is_negated) or \
+                        (values[variable_index] is not None and is_negated):
+                    clause_satisfied = True
+
+            if not clause_satisfied:
+                for literal in clause:
+                    is_negated = (literal[0] == 'X')
+                    variable_index = get_variable_index(literal)
+                    grad[variable_index] -= 1 if is_negated else -1
+
+        return grad
+
+    def gradientDescent(learning_rate=0.1):
         global values
-        def objective(x):
-            return -eval(continuous_formula, {variables[i]: x[i] for i in range(len(x))})
-
-        initial_values = numpy.zeros(len(variables))
-
-        bounds = [(0, 1)] * len(variables)
-
-        result = minimize(objective, initial_values, method='L-BFGS-B', bounds=bounds)
-
-        if result.success is not False:
-            values = result.x
-        else:
-            return False
+        global iterations
+        values = [0]*len(variables)
+        num_iterations = pow(2, len(clauses)*len(clauses[0]))
+        for i in range(num_iterations):
+            iterations += 1
+            grad = gradient()
+            values -= learning_rate * grad
+            if objective_function() == len(clauses):
+                values = grad
+                return True
+        return False
 
     match evolution_type:
         case EvolutionType.GRADIENT_DESCENT:
             return gradientDescent()
+        # case EvolutionType.SIMULATED_ANNEALING:
+        #     return simulatedAnnealing()
+
 
     with open(output_file, 'a', encoding='UTF-8') as f:
         f.write('|{:<35}|'.format(EvolutionType(evolution_type).name if type(evolution_type) == EvolutionType else 'ALL'))
@@ -394,11 +502,11 @@ def base_dpll(clause: list[list[str]], probabilities: list[float]) -> bool:
 
 def dpll(clause: list[list[str]]):
     global values
+    values = [None] * len(variables)
     if evolution_type is not None:
         transform_to_continuous_formula(clause)
-        evolutionAlgorithm()
+        evolutionAlgorithm(clause)
         return
-    values = [None] * len(variables)
     probabilities = [0.5] * len(variables)
     base_dpll(clause, probabilities)
     return
@@ -471,7 +579,7 @@ ALL: all kinds of heuristics in order''')
             case '-heuristic':
                 set_heuristic_type(sys.argv[i + 1])
                 i += 2
-            case '-evolution_algorithm':
+            case '-evolution':
                 set_evolution_algorithm_type(sys.argv[i + 1])
                 i += 2
             case '-input':

@@ -16,6 +16,7 @@ class HeuristicType(Enum):
 
 class EvolutionType(Enum):
     GRADIENT_DESCENT = 'GD'
+    SIMULATED_ANNEALING = 'SA'
 
 
 class NextRec:
