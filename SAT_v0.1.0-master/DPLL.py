@@ -3,7 +3,7 @@ from time import perf_counter
 from DPLL_classes import *
 from scipy.optimize import minimize
 import numpy
-
+import pulp
 
 import random
 import math
@@ -325,11 +325,8 @@ def evolutionAlgorithm(clauses: list[list[str]]):
     def energy_function():
         return len(clauses) - objective_function()
 
-    def random_neighbor(current_state):
-        neighbor = current_state.copy()
-        index = random.randint(0, len(neighbor) - 1)
-        neighbor[index] = not neighbor[index]  # Flip the value of a random variable
-        return neighbor
+    def flip_value(value):
+        return not value if value is not None else None
 
     def acceptance_probability(energy_diff, temperature):
         if energy_diff < 0:
@@ -345,29 +342,78 @@ def evolutionAlgorithm(clauses: list[list[str]]):
         values = current_state
         best_energy = current_energy
 
+        num_variables = len(current_state)
+
         for iteration in range(max_iterations):
             temperature = initial_temperature / (1 + cooling_rate * iteration)
 
-            neighbor = random_neighbor(current_state)
+            # Generate a neighbor efficiently by flipping one random variable
+            neighbor_index = random.randint(0, num_variables - 1)
+            neighbor_state = current_state.copy()
+            neighbor_state[neighbor_index] = flip_value(neighbor_state[neighbor_index])
+
             neighbor_energy = energy_function()
 
             energy_diff = neighbor_energy - current_energy
 
             if acceptance_probability(energy_diff, temperature) > random.random():
-                current_state = neighbor
+                current_state = neighbor_state
                 current_energy = neighbor_energy
 
                 if current_energy > best_energy:
                     values = current_state
                     best_energy = current_energy
 
+    def integerLinearProgramming():
+        global variables
+        variable_values = pulp.LpVariable.dicts("Variable", range(len(variables)), 0, 1, pulp.LpBinary)
 
+        problem = pulp.LpProblem("SAT_ILP", pulp.LpMaximize)
+
+        # Objective function: maximize the number of satisfied clauses
+        problem += sum((1 for clause in clauses if any(
+            pulp.lpSum([1 - variable_values[get_variable_index(literal)]] if (literal[0] == 'X') else [
+                variable_values[get_variable_index(literal)]]) >= 1
+            for literal in clause
+        ))), "Objective"
+        problem.solve()
+
+        variables = [int(variable_values[i].value()) if variable_values[i].value() is not None else None for i in range(len(variables))]
+
+    def mixedIntegerLinearProgramming():
+        global variables
+        # Create a binary variable for each variable in the SAT problem
+        variable_values = pulp.LpVariable.dicts("Variable", range(len(variables)), 0, 1, pulp.LpInteger)
+
+        # Create the MILP problem
+        problem = pulp.LpProblem("SAT_MILP", pulp.LpMaximize)
+
+        # Objective function: maximize the number of satisfied clauses
+        problem += pulp.lpSum(1 for clause in clauses if any(
+            (1 - variable_values[get_variable_index(literal)]) if (literal[0] == 'X') else variable_values[
+                get_variable_index(literal)]
+            for literal in clause
+        )), "Objective"
+
+        # Constraints: each clause must be satisfied
+        for clause in clauses:
+            problem += pulp.lpSum((1 - variable_values[get_variable_index(literal)]) if (literal[0] == 'X') else variable_values[get_variable_index(literal)] for literal in clause) >= 1
+
+        # Solve the MILP problem
+        problem.solve()
+
+        # Extract variable assignments
+        variables = [int(variable_values[i].value()) for i in range(len(variables))]
 
     match evolution_type:
         case EvolutionType.GRADIENT_DESCENT:
             return gradientDescent()
         case EvolutionType.SIMULATED_ANNEALING:
             return simulatedAnnealing()
+        case EvolutionType.INTEGER_LINEAR_PROGRAMMING:
+            return integerLinearProgramming()
+        case EvolutionType.MIXED_INTEGER_LINEAR_PROGRAMMING:
+            return mixedIntegerLinearProgramming()
 
 
 
@@ -555,13 +601,17 @@ def dpll(clause: list[list[str]]):
 
 
 def executeCommand():
-    def set_evolution_algorithm_type(type='LS'):
+    def set_evolution_algorithm_type(type='GD'):
         global evolution_type
         match type:
             case EvolutionType.GRADIENT_DESCENT.value:
                 evolution_type = EvolutionType.GRADIENT_DESCENT
             case EvolutionType.SIMULATED_ANNEALING.value:
                 evolution_type = EvolutionType.SIMULATED_ANNEALING
+            case EvolutionType.INTEGER_LINEAR_PROGRAMMING.value:
+                evolution_type = EvolutionType.INTEGER_LINEAR_PROGRAMMING
+            case EvolutionType.MIXED_INTEGER_LINEAR_PROGRAMMING.value:
+                evolution_type = EvolutionType.MIXED_INTEGER_LINEAR_PROGRAMMING
 
     def set_heuristic_type(type: str):
         global heuristic_type
@@ -598,11 +648,11 @@ ALL: all kinds of heuristics in order''')
         input_file = file
 
     def set_output_file(file: str):
-        try:
-            f = open(file)
-            f.close()
-        except IOError:
-            sys.exit('Invalid file name')
+        # try:
+        #     f = open(file)
+        #     f.close()
+        # except IOError:
+        #     sys.exit('Invalid file name')
         global output_file
         output_file = file
 
